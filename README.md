@@ -20,9 +20,9 @@ See [CLAUDE.md](CLAUDE.md) for a deeper architecture breakdown.
 ## Requirements
 
 - Windows, with [Google Drive for Desktop](https://www.google.com/drive/download/) installed and syncing (the script writes to `G:\My Drive\ActivityTracker` by default — adjust `DRIVE_DIR` in `pc_activity_tracker.py` if your Drive is mounted elsewhere).
-- Python 3, with `psutil` and `pywin32` installed:
+- Python 3, with dependencies installed:
   ```
-  pip install psutil pywin32
+  pip install -r requirements.txt
   ```
 - Chrome and/or Edge (the only browsers currently supported).
 
