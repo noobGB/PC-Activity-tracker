@@ -36,18 +36,29 @@ See [CLAUDE.md](CLAUDE.md) for a deeper architecture breakdown.
    python pc_activity_tracker.py
    ```
    Let it run for a minute or two, then check that `activity_log.csv` is being created/updated in your Drive folder, and check `%LOCALAPPDATA%\ActivityTracker\tracker.log` for errors.
-5. Register it to run automatically at logon (requires an elevated/Administrator shell):
+5. Edit the hardcoded paths in `run_tracker.bat` and `run_tracker_hidden.vbs` to match where you cloned the repo and your `pythonw.exe` location.
+6. Register it to run automatically at logon, launched through the watchdog wrapper rather than directly (requires an elevated/Administrator shell):
    ```
-   schtasks /create /tn "PCActivityTracker" /tr "\"<path to pythonw.exe>\" \"<path to pc_activity_tracker.py>\"" /sc onlogon /rl limited /f
+   schtasks /create /tn "PCActivityTracker" /tr "wscript.exe \"<path to run_tracker_hidden.vbs>\"" /sc onlogon /rl limited /f
    ```
+   The watchdog (`run_tracker_hidden.vbs` → `run_tracker.bat`) relaunches the tracker within ~10 seconds any time it exits for any reason (crash, killed across a sleep/wake cycle, etc.), instead of only restarting at the next logon. `run_tracker_hidden.vbs` is what keeps this invisible — running the `.bat` directly from Task Scheduler would otherwise flash/hold open a console window.
 
 ## Managing the scheduled task
 
+Because of the watchdog, killing `pythonw.exe` alone doesn't stop tracking — the `.bat` loop just relaunches it within ~10s. Use these instead:
+
 ```
-schtasks /run /tn "PCActivityTracker"      # start now
-schtasks /end /tn "PCActivityTracker"      # stop
+schtasks /run /tn "PCActivityTracker"                 # start now
+schtasks /end /tn "PCActivityTracker"                 # stop -- kills the whole watchdog process tree, not just pythonw.exe
 schtasks /query /tn "PCActivityTracker" /v /fo list   # status
-schtasks /delete /tn "PCActivityTracker" /f           # remove entirely
+schtasks /change /tn "PCActivityTracker" /disable     # pause -- won't restart at next logon either (re-enable with /enable)
+```
+
+To remove it entirely, stop it first, *then* delete the task -- deleting the task definition doesn't kill an already-running process tree, so deleting first would leave the watchdog and tracker running orphaned from Task Scheduler:
+
+```
+schtasks /end /tn "PCActivityTracker"
+schtasks /delete /tn "PCActivityTracker" /f
 ```
 
 ## Configuration
