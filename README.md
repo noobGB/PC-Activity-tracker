@@ -12,7 +12,7 @@ For keeping a personal, searchable record of what you read, watched, and worked 
 - Polls the foreground window every 10s to track app/window usage.
 - Reads new Chrome/Edge browser history every 5 minutes.
 - Buffers everything in memory and flushes to the CSV once a minute.
-- Once a day, trims the CSV down to the last 7 days to keep it small.
+- Keeps the full history indefinitely -- the CSV is never trimmed.
 - No cloud APIs or accounts involved for storage — it just writes a file inside your local Google Drive sync folder, and Drive for Desktop handles the upload.
 
 See [CLAUDE.md](CLAUDE.md) for a deeper architecture breakdown.
@@ -70,8 +70,6 @@ All timing is overridable via environment variables (useful for quickly testing 
 | `ACTIVITY_TRACKER_POLL_INTERVAL` | `10` | Seconds between foreground-window checks |
 | `ACTIVITY_TRACKER_BROWSER_INTERVAL` | `300` | Seconds between browser-history reads |
 | `ACTIVITY_TRACKER_FLUSH_INTERVAL` | `60` | Seconds between CSV flushes |
-| `ACTIVITY_TRACKER_PRUNE_INTERVAL` | `86400` | Seconds between retention prune passes |
-| `ACTIVITY_TRACKER_RETENTION_DAYS` | `7` | Days of history kept in the CSV |
 
 ## Privacy
 

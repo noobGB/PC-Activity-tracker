@@ -58,8 +58,6 @@ CSV_HEADERS = [
 # real defaults to fire.
 POLL_INTERVAL = int(os.environ.get("ACTIVITY_TRACKER_POLL_INTERVAL", 10))            # how often we check the foreground window
 BROWSER_CHECK_INTERVAL = int(os.environ.get("ACTIVITY_TRACKER_BROWSER_INTERVAL", 300))  # how often we read new browser history
-PRUNE_INTERVAL = int(os.environ.get("ACTIVITY_TRACKER_PRUNE_INTERVAL", 86400))       # how often we trim old rows (once a day)
-RETENTION_DAYS = int(os.environ.get("ACTIVITY_TRACKER_RETENTION_DAYS", 7))           # how much history to keep in the CSV
 FLUSH_INTERVAL = int(os.environ.get("ACTIVITY_TRACKER_FLUSH_INTERVAL", 60))          # how often buffered rows get written to the CSV
 MIN_SESSION_SECONDS = 5  # ignore window-focus flickers shorter than this (e.g. alt-tabbing through windows)
 
@@ -132,55 +130,6 @@ def append_rows(rows):
             time.sleep(2)
     log(f"ERROR: failed to flush {len(rows)} rows after retries -- will retry next flush")
     return False
-
-
-def prune_old_rows():
-    """Trim the CSV down to just the last RETENTION_DAYS of data, to keep the
-    file (and its Drive storage/sync footprint) from growing forever.
-
-    Reads the whole CSV, keeps the header plus any row whose 'date' column is
-    on or after today - RETENTION_DAYS, and rewrites the file with only those
-    rows. Skips the rewrite entirely if nothing would actually be dropped, so
-    a normal day-to-day run doesn't churn a full-file rewrite through Drive
-    sync for no reason. The rewrite itself goes to a temp file and is swapped
-    in with os.replace (atomic), so an interruption mid-write can't corrupt
-    the live CSV -- worst case we just retry the whole prune next time.
-    """
-    if not os.path.exists(CSV_PATH):
-        return
-
-    cutoff_date = (datetime.date.today() - datetime.timedelta(days=RETENTION_DAYS)).isoformat()
-    try:
-        with open(CSV_PATH, "r", newline="", encoding="utf-8") as f:
-            rows = list(csv.reader(f))
-    except OSError as e:
-        log(f"WARN: prune read failed: {e}")
-        return
-    if not rows:
-        return
-
-    header, data_rows = rows[0], rows[1:]
-    # Column 1 is 'date' (YYYY-MM-DD), which compares correctly as a plain string.
-    kept_rows = [r for r in data_rows if len(r) > 1 and r[1] >= cutoff_date]
-    dropped = len(data_rows) - len(kept_rows)
-    if dropped == 0:
-        return  # nothing to prune, skip the rewrite (avoids needless Drive sync churn)
-
-    tmp_path = CSV_PATH + ".prune.tmp"
-    for attempt in range(5):
-        try:
-            with open(tmp_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(header)
-                writer.writerows(kept_rows)
-            os.replace(tmp_path, CSV_PATH)
-            log(f"pruned CSV: kept {len(kept_rows)} rows, dropped {dropped} rows older than {cutoff_date}")
-            return
-        except OSError:
-            # Same rationale as append_rows: Drive sync or an open file handle
-            # can transiently block the rewrite, so retry a few times.
-            time.sleep(2)
-    log("ERROR: failed to write pruned CSV after retries")
 
 
 def make_row(dt, category, app_or_browser, title, url, duration_minutes):
@@ -361,12 +310,13 @@ def collect_browser_history(state, buffered_rows):
 # ---------------------------------------------------------------------------
 
 def main():
-    """Entry point: sets up the CSV/state, then loops forever doing four things
+    """Entry point: sets up the CSV/state, then loops forever doing three things
     on their own independent schedules:
       1. every POLL_INTERVAL seconds -- check the foreground window (app tracking)
       2. every BROWSER_CHECK_INTERVAL seconds -- pull new browser history
       3. every FLUSH_INTERVAL seconds -- write buffered rows out to the CSV
-      4. every PRUNE_INTERVAL seconds -- trim rows older than RETENTION_DAYS
+
+    The CSV is never trimmed -- it keeps the full history indefinitely.
 
     Each iteration is wrapped in its own try/except so a transient error (e.g.
     a locked file) gets logged and the loop keeps going, rather than the whole
@@ -382,7 +332,6 @@ def main():
     buffered_rows = []
     last_browser_check = 0.0
     last_flush = time.time()
-    last_prune = 0.0  # 0.0 forces a prune pass on startup too
 
     try:
         while True:
@@ -399,10 +348,6 @@ def main():
                     if append_rows(buffered_rows):
                         buffered_rows = []
                     last_flush = now
-
-                if now - last_prune >= PRUNE_INTERVAL:
-                    prune_old_rows()
-                    last_prune = now
             except Exception:
                 log("ERROR in main loop:\n" + traceback.format_exc())
 
