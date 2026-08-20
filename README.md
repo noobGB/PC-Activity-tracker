@@ -45,19 +45,21 @@ See [CLAUDE.md](CLAUDE.md) for a deeper architecture breakdown.
 
 ## Managing the scheduled task
 
-Because of the watchdog, killing `pythonw.exe` alone doesn't stop tracking — the `.bat` loop just relaunches it within ~10s. Use these instead:
+Because of the watchdog, killing `pythonw.exe` alone doesn't stop tracking — the `.bat` loop just relaunches it within ~10s. And **`schtasks /end` alone isn't reliable either**: in testing, it only kills the `wscript.exe` process Task Scheduler directly launched, not the `cmd.exe`/`pythonw.exe` children underneath it — those survive as orphans, still running, just detached from Task Scheduler.
+
+Use `stop_tracker.bat` to actually stop everything. It matches processes by command line (every `pythonw.exe` running `pc_activity_tracker.py`, every `cmd.exe` running `run_tracker.bat`) rather than relying on Task Scheduler's tracking, so it cleans up the whole chain -- and any orphaned/duplicate copies too, if that's ever happened:
 
 ```
+stop_tracker.bat                                      # reliably stop everything
 schtasks /run /tn "PCActivityTracker"                 # start now
-schtasks /end /tn "PCActivityTracker"                 # stop -- kills the whole watchdog process tree, not just pythonw.exe
 schtasks /query /tn "PCActivityTracker" /v /fo list   # status
 schtasks /change /tn "PCActivityTracker" /disable     # pause -- won't restart at next logon either (re-enable with /enable)
 ```
 
-To remove it entirely, stop it first, *then* delete the task -- deleting the task definition doesn't kill an already-running process tree, so deleting first would leave the watchdog and tracker running orphaned from Task Scheduler:
+To remove it entirely, run `stop_tracker.bat` first, *then* delete the task:
 
 ```
-schtasks /end /tn "PCActivityTracker"
+stop_tracker.bat
 schtasks /delete /tn "PCActivityTracker" /f
 ```
 
