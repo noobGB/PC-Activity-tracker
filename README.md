@@ -71,6 +71,8 @@ A local, on-demand Streamlit dashboard reads `activity_log.csv` and shows a cate
 streamlit run dashboard.py
 ```
 
+or just double-click `open_dashboard.bat`.
+
 Opens a `localhost`-only page in your browser (locked to `127.0.0.1` via `.streamlit/config.toml` — it never binds to your LAN or exposes a network URL, since this data is personal). The categorization logic lives in `analysis.py`, separate from the UI, so it can be reused by a future CLI report too.
 
 ## Configuration
