@@ -63,6 +63,16 @@ stop_tracker.bat
 schtasks /delete /tn "PCActivityTracker" /f
 ```
 
+## Dashboard
+
+A local, on-demand Streamlit dashboard reads `activity_log.csv` and shows a categorized breakdown — time by app, web activity by category, a daily development-vs-browsing trend, and a date-range filter — recomputed fresh each time you open or refresh it.
+
+```
+streamlit run dashboard.py
+```
+
+Opens a `localhost`-only page in your browser (locked to `127.0.0.1` via `.streamlit/config.toml` — it never binds to your LAN or exposes a network URL, since this data is personal). The categorization logic lives in `analysis.py`, separate from the UI, so it can be reused by a future CLI report too.
+
 ## Configuration
 
 All timing is overridable via environment variables (useful for quickly testing changes without waiting on the production intervals):

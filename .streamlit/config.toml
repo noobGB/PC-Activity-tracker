@@ -1,0 +1,8 @@
+# Binds the dashboard to loopback only. This CSV holds real browser history and
+# app-usage data (see README's Privacy section) -- it must never be reachable from
+# the LAN or internet, only from this machine. Without this, `streamlit run`
+# defaults to binding 0.0.0.0 and advertises a Network/External URL that other
+# devices on the same network (or, if the router NATs/forwards the port, beyond it)
+# could actually connect to.
+[server]
+address = "127.0.0.1"
