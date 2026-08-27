@@ -60,6 +60,10 @@ POLL_INTERVAL = int(os.environ.get("ACTIVITY_TRACKER_POLL_INTERVAL", 10))       
 BROWSER_CHECK_INTERVAL = int(os.environ.get("ACTIVITY_TRACKER_BROWSER_INTERVAL", 300))  # how often we read new browser history
 FLUSH_INTERVAL = int(os.environ.get("ACTIVITY_TRACKER_FLUSH_INTERVAL", 60))          # how often buffered rows get written to the CSV
 MIN_SESSION_SECONDS = 5  # ignore window-focus flickers shorter than this (e.g. alt-tabbing through windows)
+# If the gap between two consecutive polls is much larger than POLL_INTERVAL, the machine was
+# almost certainly asleep/locked/suspended in between rather than genuinely idle on one window
+# the whole time -- see WindowTracker.poll().
+IDLE_GAP_SECONDS = max(POLL_INTERVAL * 5, 30)
 
 WEBKIT_EPOCH_DELTA = 11644473600  # seconds between 1601-01-01 and 1970-01-01 (Chrome/Edge timestamp base)
 
@@ -185,13 +189,30 @@ class WindowTracker:
 
     def __init__(self):
         self.current = None  # dict: app, title, start (datetime) -- the in-progress session
+        self.last_poll = None  # datetime of the previous poll() call, to detect sleep/lock gaps
 
     def poll(self, buffered_rows):
         """Check the current foreground window; if it's different from the
         in-progress session, close that session out (appending a row if it
-        lasted long enough) and start timing the new one."""
+        lasted long enough) and start timing the new one.
+
+        Also detects sleep/lock/suspend gaps: if far more time passed since the
+        last poll than POLL_INTERVAL could account for, the machine was almost
+        certainly asleep or locked rather than genuinely idle on one window the
+        whole time. In that case the in-progress session is closed out as of the
+        *last poll* (not now), and the gap itself is dropped instead of being
+        attributed as active duration to whatever window happened to be focused
+        before/after the gap."""
         app, title = get_foreground_info()
         now = datetime.datetime.now()
+
+        if self.last_poll is not None:
+            gap = (now - self.last_poll).total_seconds()
+            if gap > IDLE_GAP_SECONDS:
+                self._close_session(self.last_poll, buffered_rows)
+                self.current = None
+        self.last_poll = now
+
         if self.current is None:
             self.current = {"app": app, "title": title, "start": now}
             return
